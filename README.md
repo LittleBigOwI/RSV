@@ -1,4 +1,4 @@
-# SLURM Job Monitoring Script with Graphical Visualization
+# Romeo Slurm Viewer (RSV)
 
 This small project provides a **Terminal User Interface (TUI)** of your SLURM jobs, showing CPU and GPU allocations per node using characters. It is intended for use on clusters like [ROMEO](https://romeo.univ-reims.fr/).
 
@@ -25,6 +25,7 @@ This small project provides a **Terminal User Interface (TUI)** of your SLURM jo
   - ASCII graphical representation of cores and GPUs per node.
 
 ## Planned Features
+
 - Color-coded status:
   - `RUNNING` → Green
   - `PENDING` → Yellow
