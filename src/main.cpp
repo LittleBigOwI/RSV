@@ -80,7 +80,6 @@ int main() {
 
     Component sidebar =
         Menu(&entries, &selected, menu_opt)
-        | border
         | size(WIDTH, EQUAL, 30);
 
     Component interface_job = Container::Vertical({
@@ -90,6 +89,7 @@ int main() {
 
     Component interface_jobs = Container::Horizontal({
         sidebar,
+        Renderer([] { return hbox({text("  "), separator(), text("  ")}); }),
         interface_job | flex,
     });
 

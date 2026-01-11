@@ -4,6 +4,10 @@ This small project provides a **Terminal User Interface (TUI)** of your SLURM jo
 
 ---
 
+<p align="center">
+  <img src="img/app.gif" alt="App preview" width="600">
+</p>
+
 ## Features
 
 - Lists all SLURM jobs for the current user.

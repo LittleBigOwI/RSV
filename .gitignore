@@ -3,3 +3,6 @@ myjobs.v3.sh
 
 # Build files
 build/
+
+# Extras
+*.mkv

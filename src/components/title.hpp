@@ -13,7 +13,7 @@ inline ftxui::Component title(std::string content) {
             filler(),
             text(content) | bold | center,
             filler()
-        }) | border | size(HEIGHT, EQUAL, 3);
+        }) | size(HEIGHT, EQUAL, 3);
     });
 }
 
