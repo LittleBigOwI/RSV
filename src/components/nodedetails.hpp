@@ -9,26 +9,29 @@
 namespace ui {
 using namespace ftxui;
 
-// Extract APU prefix from node name (e.g., "romeo-a057" → "romeo-a")
+// Extract APU prefix from node name by removing trailing digits
+// e.g., "romeo-a057" → "romeo-a", "romeo-gpu01" → "romeo-gpu"
 inline std::string extractApuPrefix(const std::string& node_name) {
-    std::regex re(R"(^([a-zA-Z]+-[a-zA-Z]+))");
-    std::smatch match;
-    if (std::regex_search(node_name, match, re)) {
-        return match[1].str();
-    }
-    return "unknown";
+    std::regex re(R"([0-9]+$)");
+    return std::regex_replace(node_name, re, "");
 }
 
-// Convert APU prefix to readable name (auto-generated from prefix)
+// Convert APU prefix to readable name (matching ROMEO cluster naming)
 inline std::string getApuDisplayName(const std::string& prefix) {
-    // Extract the letter suffix (e.g., "romeo-a" → "A")
-    std::regex re(R"(-([a-zA-Z])$)");
-    std::smatch match;
-    if (std::regex_search(prefix, match, re)) {
-        char letter = std::toupper(match[1].str()[0]);
-        return "APU " + std::string(1, letter) + " (" + prefix + ")";
+    static const std::map<std::string, std::string> apu_names = {
+        {"romeo-a",   "APU ARM (romeo-a)"},
+        {"romeo-b",   "APU Standard (romeo-b)"},
+        {"romeo-c",   "APU Compute (romeo-c)"},
+        {"romeo-gpu", "APU GPU (romeo-gpu)"},
+        {"romeo-fat", "APU Fat Nodes (romeo-fat)"},
+        {"romeo-arm", "APU ARM (romeo-arm)"},
+    };
+
+    auto it = apu_names.find(prefix);
+    if (it != apu_names.end()) {
+        return it->second;
     }
-    return "APU (" + prefix + ")";
+    return "APU: " + prefix;
 }
 
 // Group structure for APU statistics
@@ -44,18 +47,18 @@ struct ApuGroup {
 
 // Render a single node cell
 inline Element renderNodeCell(const api::NodeAllocation& node) {
-    Element title = text(node.node_name) | color(Color::BlueLight) | bold;
+    Element title = text(node.node_name) | color(Color::Cyan) | bold;
 
     const int cores_per_line = 20;
     std::vector<Element> core_lines;
     int line_count = 0;
     std::vector<Element> current_line;
 
-    current_line.push_back(text("CPUs   : "));
+    current_line.push_back(text("Coeurs : "));
 
     for (int i = 0; i < node.total_cores; ++i) {
         if (std::find(node.allocated_cores.begin(), node.allocated_cores.end(), i) != node.allocated_cores.end())
-            current_line.push_back(text("■") | color(Color::Blue));
+            current_line.push_back(text("■") | color(Color::Green));
         else
             current_line.push_back(text("."));
 
@@ -63,7 +66,7 @@ inline Element renderNodeCell(const api::NodeAllocation& node) {
         if (line_count == cores_per_line) {
             core_lines.push_back(hbox(current_line));
             current_line.clear();
-            current_line.push_back(text("         "));
+            current_line.push_back(text("         ")); // 9 spaces to align with "Coeurs : "
             line_count = 0;
         }
     }
@@ -82,7 +85,7 @@ inline Element renderNodeCell(const api::NodeAllocation& node) {
     gpu_line.push_back(text("GPUs   : "));
     for (int i = 0; i < node.total_gpus; ++i) {
         if (i < node.allocated_gpus)
-            gpu_line.push_back(text("● ") | color(Color::Blue));
+            gpu_line.push_back(text("● ") | color(Color::Yellow));
         else
             gpu_line.push_back(text("○ "));
     }
@@ -108,24 +111,24 @@ inline Element renderNodeCell(const api::NodeAllocation& node) {
     });
 }
 
-// Render APU group header with statistics
+// Render APU group header with statistics (matching bash script style)
 inline Element renderApuHeader(const ApuGroup& group) {
-    std::string summary = std::to_string(group.nodes.size()) + " noeud(s) | " +
-                          std::to_string(group.total_allocated_cores) + "/" +
-                          std::to_string(group.total_cores) + " CPUs | " +
-                          std::to_string(group.total_allocated_gpus) + "/" +
-                          std::to_string(group.total_gpus) + " GPUs";
+    std::string stats = "Noeuds: " + std::to_string(group.nodes.size()) +
+                        " | Coeurs alloués: " + std::to_string(group.total_allocated_cores) +
+                        " | GPUs alloués: " + std::to_string(group.total_allocated_gpus);
 
     return vbox({
         text(""),
+        text("╔══════════════════════════════════════════════════════════╗") | color(Color::Magenta) | bold,
         hbox({
-            text("━━━ ") | color(Color::Yellow),
-            text(group.display_name) | bold | color(Color::Yellow),
-            text(" ━━━ ") | color(Color::Yellow),
-            text(summary) | dim,
-            text(" ") | flex,
+            text("║ ") | color(Color::Magenta) | bold,
+            text(group.display_name) | bold,
         }),
-        text(""),
+        hbox({
+            text("║ ") | color(Color::Magenta) | bold,
+            text(stats) | color(Color::Cyan),
+        }),
+        text("╚══════════════════════════════════════════════════════════╝") | color(Color::Magenta) | bold,
     });
 }
 
