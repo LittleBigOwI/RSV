@@ -175,6 +175,7 @@ public:
             auto nodes = expandNodelist(node_str);
             auto cpu_ids = parseCpuIds(cpu_str);
 
+            size_t missing_cpus = cpu_ids.size() % nodes.size();
             int cpus_per_node = cpu_ids.size() / nodes.size();
 
             int allocated_gpus = 0;
@@ -185,24 +186,25 @@ public:
                     allocated_gpus = std::stoi(gm[1].str());
             }
 
-            int group_index = 0;
-            for (const auto& n : nodes) {
+            int cpu_index = 0;
+            for (size_t group_index = 0; group_index < nodes.size(); ++group_index) {
                 NodeAllocation na;
-                na.node_name = n;
+                na.node_name = nodes[group_index];
 
-                auto [total_cores, total_gpus] = getNodeInfo(n);
+                auto [total_cores, total_gpus] = getNodeInfo(na.node_name);
                 na.total_cores = total_cores;
                 na.total_gpus  = total_gpus;
 
                 na.allocated_gpus = allocated_gpus / nodes.size();
 
                 for (int i = 0; i < cpus_per_node; ++i) {
-                    na.allocated_cores.push_back(
-                        cpu_ids[group_index * cpus_per_node + i]
-                    );
+                    na.allocated_cores.push_back(cpu_ids[cpu_index++]);
                 }
 
-                group_index++;
+                if (group_index < missing_cpus) {
+                    na.allocated_cores.push_back(cpu_ids[cpu_index++]);
+                }
+
                 job.node_allocations.push_back(std::move(na));
             }
         }
