@@ -44,6 +44,7 @@ private:
     static inline std::string exec(const std::string& cmd) {
         std::array<char, 128> buffer;
         std::string result;
+        result.reserve(8192);
 
         std::unique_ptr<FILE, int(*)(FILE*)> pipe(
             popen(cmd.c_str(), "r"),
@@ -58,7 +59,8 @@ private:
 
     static inline std::vector<int> parseCpuIds(const std::string& cpu_ids_str) {
         std::vector<int> cpu_ids;
-        std::regex re(R"((\d+)-(\d+)|(\d+))");
+        static std::regex re(R"((\d+)-(\d+)|(\d+))");
+        
         auto begin = std::sregex_iterator(cpu_ids_str.begin(), cpu_ids_str.end(), re);
         auto end = std::sregex_iterator();
 
@@ -77,8 +79,8 @@ private:
 
     static inline std::pair<int,int> getNodeInfo(const std::string& node_name) {
         std::string out = exec("scontrol show node " + node_name);
-        std::regex cpu_re("CPUTot=(\\d+)");
-        std::regex gpu_re("Gres=gpu:[^:]*:(\\d+)");
+        static std::regex cpu_re("CPUTot=(\\d+)");
+        static std::regex gpu_re("Gres=gpu:[^:]*:(\\d+)");
 
         int total_cores = 0;
         int total_gpus = 0;
@@ -159,7 +161,7 @@ public:
             else if (key == "Features") job.constraints = val;
         }
 
-        std::regex alloc_re(
+        static std::regex alloc_re(
             R"(^\s*Nodes=([^\s]+)\s+CPU_IDs=([^\s]+).*?(?:GRES=([^\s]+))?)",
             std::regex_constants::multiline
         );
@@ -180,7 +182,7 @@ public:
 
             int allocated_gpus = 0;
             if (!gres_str.empty()) {
-                std::regex gpunum(R"(gpu:[^:]*:(\d+))");
+                static std::regex gpunum(R"(gpu:[^:]*:(\d+))");
                 std::smatch gm;
                 if (std::regex_search(gres_str, gm, gpunum))
                     allocated_gpus = std::stoi(gm[1].str());
