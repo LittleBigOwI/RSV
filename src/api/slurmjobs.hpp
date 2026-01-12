@@ -77,23 +77,54 @@ private:
         return cpu_ids;
     }
 
-    static inline std::pair<int,int> getNodeInfo(const std::string& node_name) {
-        std::string out = exec("scontrol show node " + node_name);
-        static std::regex cpu_re("CPUTot=(\\d+)");
-        static std::regex gpu_re("Gres=gpu:[^:]*:(\\d+)");
+    static inline std::unordered_map<std::string, std::pair<int,int>> getAllNodeInfo(const std::string& node_str) {
+        std::unordered_map<std::string, std::pair<int,int>> info;
+        if (node_str.empty()) return info;
 
+        std::string out = exec("scontrol show node " + node_str);
+        if (out.empty()) return info;
+
+        std::istringstream iss(out);
+        std::string line;
+
+        static std::regex name_re(R"(NodeName=([^\s]+))");
+        static std::regex cpu_re(R"(CPUTot=(\d+))");
+        static std::regex gpu_re(R"(Gres=gpu:[^:]*:(\d+))");
+
+        std::string current_node;
         int total_cores = 0;
         int total_gpus = 0;
 
-        std::smatch m;
-        if (std::regex_search(out, m, cpu_re)) total_cores = std::stoi(m[1]);
-        if (std::regex_search(out, m, gpu_re)) total_gpus = std::stoi(m[1]);
+        for (std::string line; std::getline(iss, line); ) {
+            std::smatch m;
 
-        return {total_cores, total_gpus};
+            if (std::regex_search(line, m, name_re)) {
+                if (!current_node.empty()) {
+                    info[current_node] = {total_cores, total_gpus};
+                }
+                current_node = m[1];
+                total_cores = 0;
+                total_gpus = 0;
+            }
+
+            if (std::regex_search(line, m, cpu_re)) {
+                total_cores = std::stoi(m[1]);
+            }
+            if (std::regex_search(line, m, gpu_re)) {
+                total_gpus = std::stoi(m[1]);
+            }
+        }
+
+        if (!current_node.empty()) {
+            info[current_node] = {total_cores, total_gpus};
+        }
+
+        return info;
     }
 
-    static inline std::vector<std::string> expandNodelist(const std::string& nodelist) {
-        std::string cmd = "scontrol show hostnames " + nodelist + " 2>/dev/null";
+
+    static inline std::vector<std::string> expandNodelist(const std::string& node_list) {
+        std::string cmd = "scontrol show hostnames " + node_list + " 2>/dev/null";
         std::string out = exec(cmd);
         std::vector<std::string> nodes;
         std::istringstream iss(out);
@@ -188,14 +219,22 @@ public:
                     allocated_gpus = std::stoi(gm[1].str());
             }
 
+            std::unordered_map<std::string, std::pair<int,int>> nodes_info = getAllNodeInfo(node_str);         
+
             int cpu_index = 0;
             for (size_t group_index = 0; group_index < nodes.size(); ++group_index) {
                 NodeAllocation na;
                 na.node_name = nodes[group_index];
 
-                auto [total_cores, total_gpus] = getNodeInfo(na.node_name);
-                na.total_cores = total_cores;
-                na.total_gpus  = total_gpus;
+                auto it = nodes_info.find(na.node_name);
+
+                if (it != nodes_info.end()) {
+                    na.total_cores = it->second.first;
+                    na.total_gpus  = it->second.second;
+                } else {
+                    na.total_cores = 0;
+                    na.total_gpus  = 0;
+                }
 
                 na.allocated_gpus = allocated_gpus / nodes.size();
 
@@ -210,7 +249,6 @@ public:
                 job.node_allocations.push_back(std::move(na));
             }
         }
-
 
         return job;
     }
