@@ -19,13 +19,12 @@ inline Component nodedetails(const api::DetailedJob& job, int width) {
         int count = 0;
 
         for (const auto& node : job.node_allocations) {
-            // Node title
             Element title = text(node.node_name) | color(Color::BlueLight) | bold;
 
-            // Build cores line by line
             const int cores_per_line = 20;
-            std::vector<Element> core_lines;
             int line_count = 0;
+            
+            std::vector<Element> core_lines;
             std::vector<Element> current_line;
 
             current_line.push_back(text("CPUs   : "));
@@ -46,10 +45,6 @@ inline Component nodedetails(const api::DetailedJob& job, int width) {
             }
 
             if (!current_line.empty()) {
-                while (line_count < cores_per_line) {
-                    current_line.push_back(text("."));
-                    line_count++;
-                }
                 core_lines.push_back(hbox(current_line));
             }
 

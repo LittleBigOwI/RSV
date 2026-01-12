@@ -1,5 +1,5 @@
 #!/bin/bash
-# Usage: ./deploy_rsv.sh <username> <host>
+# Usage: ./deploy.sh <username> <host>
 
 set -e
 
