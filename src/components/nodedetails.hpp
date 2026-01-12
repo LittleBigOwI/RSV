@@ -14,7 +14,7 @@ inline Component nodedetails(const api::DetailedJob& job, int width) {
         std::vector<std::vector<Element>> rows;
         std::vector<Element> row;
 
-        const int cell_width = 44;
+        const int cell_width = 46;
         int nodes_per_row = std::max(1, width / cell_width);
         int count = 0;
 

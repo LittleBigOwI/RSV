@@ -159,60 +159,54 @@ public:
             else if (key == "Features") job.constraints = val;
         }
 
-        std::regex nodes_re(R"(^\s*Nodes=([^\s]+))", std::regex_constants::multiline);
-        std::smatch m;
+        std::regex alloc_re(
+            R"(^\s*Nodes=([^\s]+)\s+CPU_IDs=([^\s]+).*?(?:GRES=([^\s]+))?)",
+            std::regex_constants::multiline
+        );
 
-        if (std::regex_search(sctrl, m, nodes_re)) {
-            auto node_str = m[1].str();
+        std::sregex_iterator it(sctrl.begin(), sctrl.end(), alloc_re);
+        std::sregex_iterator end;
+
+        for (; it != end; ++it) {
+            std::string node_str = (*it)[1].str();
+            std::string cpu_str  = (*it)[2].str();
+            std::string gres_str = it->size() > 3 ? (*it)[3].str() : "";
+
             auto nodes = expandNodelist(node_str);
-
-            std::regex cpu_re(R"(CPU_IDs=([^\s]+))");
-            std::smatch cpu_m;
-            if (!std::regex_search(sctrl, cpu_m, cpu_re)) return job;
-            auto cpu_str = cpu_m[1].str();
-
-            std::vector<std::string> cpu_groups;
-            std::stringstream ss(cpu_str);
-            std::string group;
-            while (std::getline(ss, group, ',')) cpu_groups.push_back(group);
-
             auto cpu_ids = parseCpuIds(cpu_str);
-            int nodes_count = nodes.size();
-            int cpus_per_node = cpu_ids.size() / nodes_count;
-            int group_index = 0;
 
-            std::regex gpu_re(R"(GRES=([^\s]+))");
-            std::smatch gpu_m;
+            int cpus_per_node = cpu_ids.size() / nodes.size();
+
             int allocated_gpus = 0;
-            
-            if (std::regex_search(sctrl, gpu_m, gpu_re)) {
-                std::string gres = gpu_m[1].str();
+            if (!gres_str.empty()) {
                 std::regex gpunum(R"(gpu:[^:]*:(\d+))");
                 std::smatch gm;
-                if (std::regex_search(gres, gm, gpunum))
+                if (std::regex_search(gres_str, gm, gpunum))
                     allocated_gpus = std::stoi(gm[1].str());
             }
 
-            for (auto& n : nodes) {
+            int group_index = 0;
+            for (const auto& n : nodes) {
                 NodeAllocation na;
                 na.node_name = n;
-                
+
                 auto [total_cores, total_gpus] = getNodeInfo(n);
-                
                 na.total_cores = total_cores;
-                na.total_gpus = total_gpus;
+                na.total_gpus  = total_gpus;
+
                 na.allocated_gpus = allocated_gpus / nodes.size();
 
-                na.allocated_cores.clear();
                 for (int i = 0; i < cpus_per_node; ++i) {
-                    auto& g = cpu_ids[(group_index * cpus_per_node) + i];
-                    na.allocated_cores.push_back(g);
+                    na.allocated_cores.push_back(
+                        cpu_ids[group_index * cpus_per_node + i]
+                    );
                 }
 
                 group_index++;
-                job.node_allocations.push_back(na);
+                job.node_allocations.push_back(std::move(na));
             }
         }
+
 
         return job;
     }
