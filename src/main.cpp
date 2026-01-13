@@ -45,7 +45,7 @@ int main() {
 
     job_nodes_scrollable =
         CatchEvent(job_nodes_scrollable, [&](Event e) {
-            constexpr float wheel_step = 0.05f;
+            constexpr float wheel_step = 0.1f;
 
             bool handled = false;
 
