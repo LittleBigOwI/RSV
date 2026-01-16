@@ -54,6 +54,22 @@ struct DetailedJob {
     std::vector<NodeAllocation> node_allocations;
 };
 
+struct JobHistory {
+    std::string id;
+    std::string name;
+    std::string state;
+    std::string start;
+    std::string end;
+    std::string elapsed;
+    std::string exit_code;
+    std::string max_rss;
+    std::string cpu_time;
+    std::string ncpus;
+    std::string nnodes;
+    std::string partition;
+    std::string account;
+};
+
 class slurm {
 private:
     static inline std::string exec(const std::string& cmd) {
@@ -331,6 +347,72 @@ public:
         if (std::regex_search(raw, m, stderr_re)) stderr_path = expandSlurmPath(m[1].str(), job_id, job_name);
 
         return {stdout_path, stderr_path};
+    }
+
+    static std::vector<JobHistory> getJobHistory(const std::string& filter = "") {
+        std::vector<JobHistory> history;
+
+        const char* user = std::getenv("USER");
+        if (!user) user = "unknown";
+
+        std::string cmd = "sacct -u " + std::string(user) +
+                        " --starttime=now-7days"
+                        " --format=JobID,JobName%30,State,Start,End,Elapsed,ExitCode,MaxRSS,CPUTime,NCPUs,NNodes,Partition,Account"
+                        " --noheader -P 2>/dev/null";
+
+        if (!filter.empty()) {
+            cmd = "sacct -u " + std::string(user) +
+                " --starttime=now-7days -s " + filter +
+                " --format=JobID,JobName%30,State,Start,End,Elapsed,ExitCode,MaxRSS,CPUTime,NCPUs,NNodes,Partition,Account"
+                " --noheader -P 2>/dev/null";
+        }
+
+        std::array<char, 512> buffer;
+        std::unique_ptr<FILE, int(*)(FILE*)> pipe(
+            popen(cmd.c_str(), "r"),
+            static_cast<int(*)(FILE*)>(pclose)
+        );
+
+        if (!pipe) return history;
+
+        while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+            std::string line = buffer.data();
+            if (line.empty() || line[0] == '\n') continue;
+
+            if (!line.empty() && line.back() == '\n') line.pop_back();
+
+            std::istringstream iss(line);
+            std::string field;
+            std::vector<std::string> fields;
+
+            while (std::getline(iss, field, '|')) {
+                fields.push_back(field);
+            }
+
+            if (fields.size() >= 7) {
+                // Skip step entries (those with . in JobID like 12345.batch)
+                if (fields[0].find('.') != std::string::npos) continue;
+
+                api::JobHistory job;
+                job.id = fields[0];
+                job.name = fields[1];
+                job.state = fields[2];
+                job.start = fields[3];
+                job.end = fields[4];
+                job.elapsed = fields[5];
+                job.exit_code = fields[6];
+                if (fields.size() > 7) job.max_rss = fields[7];
+                if (fields.size() > 8) job.cpu_time = fields[8];
+                if (fields.size() > 9) job.ncpus = fields[9];
+                if (fields.size() > 10) job.nnodes = fields[10];
+                if (fields.size() > 11) job.partition = fields[11];
+                if (fields.size() > 12) job.account = fields[12];
+                history.push_back(job);
+            }
+        }
+
+        std::reverse(history.begin(), history.end());
+        return history;
     }
 
 };
