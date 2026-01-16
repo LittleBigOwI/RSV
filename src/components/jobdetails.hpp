@@ -14,10 +14,10 @@ inline ftxui::Component jobdetails(const api::DetailedJob& job) {
 
     return Renderer([job] {
         Color status_color = Color::Default;
-        if (job.status == "RUNNING")      status_color = Color::Green;
-        else if (job.status == "PENDING") status_color = Color::Yellow;
+        if      (job.status == "RUNNING")   status_color = Color::Green;
+        else if (job.status == "PENDING")   status_color = Color::Yellow;
         else if (job.status == "COMPLETED") status_color = Color::Blue;
-        else if (job.status == "FAILED")  status_color = Color::Red;
+        else if (job.status == "FAILED")    status_color = Color::Red;
         else if (job.status == "CANCELLED") status_color = Color::Magenta;
 
         std::vector<Element> elements = {
@@ -27,20 +27,19 @@ inline ftxui::Component jobdetails(const api::DetailedJob& job) {
             text("Nodes: " + std::to_string(job.nodes)),
             hbox({
                 text("Time: "),
-                text(job.elapsedTime.empty() ? "N/A" : job.elapsedTime) | color(Color::Cyan),
+                text(job.elapsedTime.empty() ? "N/A" : job.elapsedTime) | color(Color::BlueLight),
                 text(" / "),
                 text(job.maxTime) | dim,
             }),
             hbox({
-                text("Partition: "),
-                text(job.partition) | color(Color::Cyan),
-                text("  Constraints: "),
-                text(job.constraints.empty() ? "None" : job.constraints) | color(Color::Cyan),
+                text("Partition: "), text(job.partition) | color(Color::BlueLight),
+            }),
+            hbox({
+                text("Constraints: "), text(job.constraints.empty() ? "None" : job.constraints) | color(Color::BlueLight),
             }),
             hbox({text("Status: "), text(job.status) | color(status_color)}),
         };
 
-        // Show detailed reason for PENDING jobs with suggestions
         if (job.status == "PENDING" && !job.reason.empty() && job.reason != "None") {
             auto info = decodeReason(job.reason);
             elements.push_back(hbox({
