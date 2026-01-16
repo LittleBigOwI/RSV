@@ -20,17 +20,8 @@ inline Element footer() {
         text("c") | bold | color(Color::Blue),
         text(":Cancel") | dim,
         text("  "),
-        text("y") | bold | color(Color::Blue),
-        text(":Copy") | dim,
-        text("  "),
-        text("s") | bold | color(Color::Blue),
-        text(":Sort") | dim,
-        text("  "),
         text("p") | bold | color(Color::Blue),
         text(":Parts") | dim,
-        text("  "),
-        text("d") | bold | color(Color::Blue),
-        text(":Debug") | dim,
         text("  "),
         text("l") | bold | color(Color::Blue),
         text(":Logs") | dim,
@@ -42,47 +33,6 @@ inline Element footer() {
         text(":Quota") | dim,
         text("  "),
         filler(),
-    });
-}
-
-inline Component helpModal(std::function<void()> on_close) {
-    auto content = Renderer([&] {
-        return vbox({
-            text("══════════════════ RSV HELP ══════════════════") | bold | center | color(Color::Cyan),
-            text(""),
-            text("Navigation") | bold | color(Color::Yellow),
-            hbox({text("  Up / Down       ") | color(Color::Cyan), text("Navigate job list")}),
-            hbox({text("  Mouse wheel     ") | color(Color::Cyan), text("Scroll details/logs")}),
-            text(""),
-            text("Actions") | bold | color(Color::Yellow),
-            hbox({text("  r               ") | color(Color::Cyan), text("Refresh jobs")}),
-            hbox({text("  c               ") | color(Color::Cyan), text("Cancel job (with confirmation)")}),
-            hbox({text("  y               ") | color(Color::Cyan), text("Copy job ID to clipboard (yank)")}),
-            hbox({text("  s               ") | color(Color::Cyan), text("Sort jobs (cycle:ID/Name/Entry)")}),
-            text(""),
-            text("Views") | bold | color(Color::Yellow),
-            hbox({text("  p               ") | color(Color::Cyan), text("Partitions view (sinfo)")}),
-            hbox({text("  d               ") | color(Color::Cyan), text("Debug view (scontrol show job)")}),
-            hbox({text("  l               ") | color(Color::Cyan), text("Logs view (stdout/stderr, scrollable)")}),
-            hbox({text("  a               ") | color(Color::Cyan), text("History (sacct) - filter with ←→")}),
-            hbox({text("  u               ") | color(Color::Cyan), text("User quota (sacctmgr limits)")}),
-            text(""),
-            text("Other") | bold | color(Color::Yellow),
-            hbox({text("  h / ?           ") | color(Color::Cyan), text("Show this help")}),
-            hbox({text("  q / Escape      ") | color(Color::Cyan), text("Quit application")}),
-            text(""),
-            text("════════════════════════════════════════════════") | color(Color::Cyan),
-            text(""),
-            text("Press any key to close") | dim | center,
-        }) | border | clear_under | center;
-    });
-
-    return CatchEvent(content, [on_close](Event e) {
-        if (e.is_character() || e == Event::Escape || e == Event::Return) {
-            on_close();
-            return true;
-        }
-        return false;
     });
 }
 
