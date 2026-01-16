@@ -5,9 +5,8 @@
 #include "../api/slurmjobs.hpp"
 
 namespace ui {
-using namespace ftxui;
 
-inline Component nodedetails(const api::DetailedJob& job, int width) {
+inline ftxui::Component nodedetails(const api::DetailedJob& job, int width) {
     using namespace ftxui;
 
     return Renderer([job, width] {

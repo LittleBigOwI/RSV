@@ -1,8 +1,12 @@
 # Scripts
-myjobs.v3.sh
+*.sh
 
 # Build files
 build/
 
 # Extras
 *.mkv
+
+# IDE/Tools
+.claude/
+.vscode/

@@ -24,7 +24,20 @@ struct NodeAllocation {
     int total_gpus;
 };
 
+struct PartitionInfo {
+    std::string name;
+    int nodes_total = 0;
+    int nodes_idle = 0;
+    int nodes_alloc = 0;
+    int nodes_mix = 0;
+    int nodes_down = 0;
+    std::string timelimit;
+    std::string state;
+};
+
 struct DetailedJob {
+    int cpus = 0;
+    int gpus = 0;
     int nodes = 0;
 
     std::string id;
@@ -32,11 +45,29 @@ struct DetailedJob {
     std::string entry_name;
     std::string submitTime;
     std::string maxTime;
+    std::string elapsedTime;
     std::string partition;
     std::string status;
     std::string constraints;
+    std::string reason;
 
     std::vector<NodeAllocation> node_allocations;
+};
+
+struct JobHistory {
+    std::string id;
+    std::string name;
+    std::string state;
+    std::string start;
+    std::string end;
+    std::string elapsed;
+    std::string exit_code;
+    std::string max_rss;
+    std::string cpu_time;
+    std::string ncpus;
+    std::string nnodes;
+    std::string partition;
+    std::string account;
 };
 
 class slurm {
@@ -190,6 +221,8 @@ public:
             else if (key == "Partition") job.partition = val;
             else if (key == "JobState") job.status = val;
             else if (key == "Features") job.constraints = val;
+            else if (key == "RunTime") job.elapsedTime = val;
+            else if (key == "Reason") job.reason = val;
         }
 
         static std::regex alloc_re(
@@ -218,6 +251,9 @@ public:
                 if (std::regex_search(gres_str, gm, gpunum))
                     allocated_gpus = std::stoi(gm[1].str());
             }
+
+            job.cpus = cpu_ids.size();
+            job.gpus = allocated_gpus;
 
             std::unordered_map<std::string, std::pair<int,int>> nodes_info = getAllNodeInfo(node_str);         
 
@@ -251,6 +287,167 @@ public:
         }
 
         return job;
+    }
+
+    static bool cancelJob(const std::string& job_id) {
+        std::string cmd = "scancel " + job_id + " 2>&1";
+        std::string result = exec(cmd);
+        return result.empty() || result.find("error") == std::string::npos;
+    }
+
+    static std::vector<PartitionInfo> getPartitions() {
+        std::vector<PartitionInfo> partitions;
+
+        std::string cmd = "sinfo -o \"%P %a %l %D %T\" --noheader 2>/dev/null";
+        std::string out = exec(cmd);
+
+        std::map<std::string, PartitionInfo> part_map;
+
+        std::istringstream iss(out);
+        std::string line;
+        while (std::getline(iss, line)) {
+            if (line.empty()) continue;
+
+            std::istringstream lss(line);
+            std::string name, avail, timelimit, nodes_str, state;
+            lss >> name >> avail >> timelimit >> nodes_str >> state;
+
+            if (!name.empty() && name.back() == '*') {
+                name.pop_back();
+            }
+
+            int nodes = 0;
+            try { nodes = std::stoi(nodes_str); } catch (...) {}
+
+            if (part_map.find(name) == part_map.end()) {
+                part_map[name] = PartitionInfo{name, 0, 0, 0, 0, 0, timelimit, avail};
+            }
+
+            auto& p = part_map[name];
+            p.nodes_total += nodes;
+
+            if (state.find("idle") != std::string::npos) p.nodes_idle += nodes;
+            else if (state.find("mix") != std::string::npos) p.nodes_mix += nodes;
+            else if (state.find("alloc") != std::string::npos) p.nodes_alloc += nodes;
+            else if (state.find("down") != std::string::npos ||
+                     state.find("drain") != std::string::npos) p.nodes_down += nodes;
+        }
+
+        for (auto& [name, p] : part_map) {
+            partitions.push_back(p);
+        }
+
+        return partitions;
+    }
+
+    static std::string getRawJobDetails(const std::string& job_id) {
+        return exec("scontrol show job " + job_id + " 2>&1");
+    }
+
+    static std::string expandSlurmPath(const std::string& path, const std::string& job_id, const std::string& job_name) {
+        std::string result = path;
+
+        std::string base_job_id = job_id;
+        size_t dot_pos = job_id.find('.');
+        if (dot_pos != std::string::npos) {
+            base_job_id = job_id.substr(0, dot_pos);
+        }
+
+        size_t pos;
+        while ((pos = result.find("%J")) != std::string::npos) {
+            result.replace(pos, 2, job_id);
+        }
+        while ((pos = result.find("%j")) != std::string::npos) {
+            result.replace(pos, 2, base_job_id);
+        }
+        while ((pos = result.find("%x")) != std::string::npos) {
+            result.replace(pos, 2, job_name);
+        }
+
+        return result;
+    }
+
+    static std::pair<std::string, std::string> getJobLogPaths(const std::string& job_id) {
+        std::string raw = exec("scontrol show job " + job_id + " 2>/dev/null");
+
+        std::string stdout_path, stderr_path, job_name;
+
+        std::regex stdout_re(R"(StdOut=([^\s]+))");
+        std::regex stderr_re(R"(StdErr=([^\s]+))");
+        std::regex name_re(R"(JobName=([^\s]+))");
+
+        std::smatch m;
+        if (std::regex_search(raw, m, name_re)) job_name = m[1].str();
+        if (std::regex_search(raw, m, stdout_re)) stdout_path = expandSlurmPath(m[1].str(), job_id, job_name);
+        if (std::regex_search(raw, m, stderr_re)) stderr_path = expandSlurmPath(m[1].str(), job_id, job_name);
+
+        return {stdout_path, stderr_path};
+    }
+
+    static std::vector<JobHistory> getJobHistory(const std::string& filter = "") {
+        std::vector<JobHistory> history;
+
+        const char* user = std::getenv("USER");
+        if (!user) user = "unknown";
+
+        std::string cmd = "sacct -u " + std::string(user) +
+                        " --starttime=now-7days"
+                        " --format=JobID,JobName%30,State,Start,End,Elapsed,ExitCode,MaxRSS,CPUTime,NCPUs,NNodes,Partition,Account"
+                        " --noheader -P 2>/dev/null";
+
+        if (!filter.empty()) {
+            cmd = "sacct -u " + std::string(user) +
+                " --starttime=now-7days -s " + filter +
+                " --format=JobID,JobName%30,State,Start,End,Elapsed,ExitCode,MaxRSS,CPUTime,NCPUs,NNodes,Partition,Account"
+                " --noheader -P 2>/dev/null";
+        }
+
+        std::array<char, 512> buffer;
+        std::unique_ptr<FILE, int(*)(FILE*)> pipe(
+            popen(cmd.c_str(), "r"),
+            static_cast<int(*)(FILE*)>(pclose)
+        );
+
+        if (!pipe) return history;
+
+        while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+            std::string line = buffer.data();
+            if (line.empty() || line[0] == '\n') continue;
+
+            if (!line.empty() && line.back() == '\n') line.pop_back();
+
+            std::istringstream iss(line);
+            std::string field;
+            std::vector<std::string> fields;
+
+            while (std::getline(iss, field, '|')) {
+                fields.push_back(field);
+            }
+
+            if (fields.size() >= 7) {
+                // Skip step entries (those with . in JobID like 12345.batch)
+                if (fields[0].find('.') != std::string::npos) continue;
+
+                api::JobHistory job;
+                job.id = fields[0];
+                job.name = fields[1];
+                job.state = fields[2];
+                job.start = fields[3];
+                job.end = fields[4];
+                job.elapsed = fields[5];
+                job.exit_code = fields[6];
+                if (fields.size() > 7) job.max_rss = fields[7];
+                if (fields.size() > 8) job.cpu_time = fields[8];
+                if (fields.size() > 9) job.ncpus = fields[9];
+                if (fields.size() > 10) job.nnodes = fields[10];
+                if (fields.size() > 11) job.partition = fields[11];
+                if (fields.size() > 12) job.account = fields[12];
+                history.push_back(job);
+            }
+        }
+
+        std::reverse(history.begin(), history.end());
+        return history;
     }
 
 };
