@@ -29,13 +29,13 @@ inline ftxui::Component jobdetails(const api::DetailedJob& job) {
                 text("Time: "),
                 text(job.elapsedTime.empty() ? "N/A" : job.elapsedTime) | color(Color::BlueLight),
                 text(" / "),
-                text(job.maxTime) | dim,
+                text(job.maxTime),
             }),
             hbox({
-                text("Partition: "), text(job.partition) | color(Color::BlueLight),
+                text("Partition: "), text(job.partition),
             }),
             hbox({
-                text("Constraints: "), text(job.constraints.empty() ? "None" : job.constraints) | color(Color::BlueLight),
+                text("Constraints: "), text(job.constraints.empty() ? "None" : job.constraints),
             }),
             hbox({text("Status: "), text(job.status) | color(status_color)}),
         };
@@ -56,7 +56,7 @@ inline ftxui::Component jobdetails(const api::DetailedJob& job) {
             }
         }
 
-        return vbox(elements) | flex;
+        return vbox(elements, text(" "));
     });
 }
 

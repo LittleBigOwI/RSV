@@ -6,10 +6,13 @@
 #include <atomic>
 
 #include "api/slurmjobs.hpp"
-#include "components/jobdetails.hpp"
+
 #include "components/nodedetails.hpp"
-#include "components/title.hpp"
+#include "components/apudetails.hpp"
+#include "components/jobdetails.hpp"
 #include "components/footer.hpp"
+#include "components/title.hpp"
+
 #include "components/cluster_view.hpp"
 #include "components/debug_view.hpp"
 #include "components/log_view.hpp"
@@ -59,10 +62,10 @@ int main() {
 
     ScreenInteractive screen = ScreenInteractive::Fullscreen();
 
-    // Refresh function
     auto refresh_jobs = [&]() {
         *jobs = api::slurm::getUserJobs();
         entries->clear();
+        
         for (const auto& job : *jobs)
             entries->push_back(job.name + " (" + job.id + ")");
 
@@ -75,12 +78,17 @@ int main() {
             selected = jobs->size() - 1;
         }
         *current_job = api::slurm::getJobDetails((*jobs)[selected].id);
+        
         last_refresh = std::chrono::steady_clock::now();
         status_message = "Refreshed!";
     };
 
     Component job_info = Renderer([&] {
-        return ui::jobdetails(*current_job)->Render();
+        return hbox({
+            ui::jobdetails(*current_job)->Render(),
+            text("  "),
+            ui::apudetails(*current_job)->Render()
+        });
     });
 
     Component job_nodes_content = Renderer([&] {
@@ -147,32 +155,29 @@ int main() {
         interface_job | flex,
     });
 
-    // Status bar with last refresh time
-    Component status_bar = Renderer([&] {
+    Component footer = Renderer([&] { 
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_refresh).count();
         int next_refresh = AUTO_REFRESH_SECONDS - elapsed;
+        
+        Element footer_status = hbox({
+            text(" Auto-refresh: " + std::to_string(next_refresh) + "s" ) | dim,
+        });
 
-        return hbox({
-            text(" "),
-            text(status_message) | color(Color::Green),
-            filler(),
-            text("Auto-refresh: " + std::to_string(next_refresh) + "s") | dim,
-            text("  "),
+        return vbox({
+            separator(), 
+            hbox({ui::footer(), filler(), footer_status})
         });
     });
 
     Component main_content = Container::Vertical({
         ui::title("Romeo Slurm Viewer (RSV) v1.0.0"),
         interface_jobs | flex,
-        status_bar,
-        Renderer([] { return ui::footer(); }),
+        footer
     });
 
-    // Help modal
     Component help = ui::helpModal([&] { show_help = false; });
 
-    // Partition view
     Component partition_view = Renderer([&] {
         return vbox({
             text("══════════ CLUSTER PARTITIONS ══════════") | bold | center | color(Color::Cyan),
@@ -191,23 +196,19 @@ int main() {
         return false;
     });
 
-    // Debug view (will be created dynamically based on selected job)
     auto debug_component = std::make_shared<Component>(
         ui::debugView(current_job->id, [&] { show_debug = false; })
     );
 
-    // Log view (will be created dynamically based on selected job)
     auto log_component = std::make_shared<Component>(
         ui::logView(current_job->id, log_show_stderr, log_scroll_y, [&] { show_logs = false; })
     );
 
-    // History view
     auto history_scroll_y = std::make_shared<float>(0.f);
     auto history_component = std::make_shared<Component>(
         ui::historyView(history_scroll_y, [&] { show_history = false; })
     );
 
-    // Quota view
     auto quota_component = std::make_shared<Component>(
         ui::quotaView([&] { show_quota = false; })
     );

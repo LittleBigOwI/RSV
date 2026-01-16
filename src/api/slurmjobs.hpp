@@ -36,6 +36,8 @@ struct PartitionInfo {
 };
 
 struct DetailedJob {
+    int cpus = 0;
+    int gpus = 0;
     int nodes = 0;
 
     std::string id;
@@ -47,7 +49,7 @@ struct DetailedJob {
     std::string partition;
     std::string status;
     std::string constraints;
-    std::string reason;  // For PENDING jobs
+    std::string reason;
 
     std::vector<NodeAllocation> node_allocations;
 };
@@ -208,6 +210,9 @@ public:
                     allocated_gpus = std::stoi(gm[1].str());
             }
 
+            job.cpus = cpu_ids.size();
+            job.gpus = allocated_gpus;
+
             for (auto& n : nodes) {
                 NodeAllocation na;
                 na.node_name = n;
@@ -216,6 +221,7 @@ public:
                 
                 na.total_cores = total_cores;
                 na.total_gpus = total_gpus;
+
                 na.allocated_gpus = allocated_gpus / nodes.size();
 
                 na.allocated_cores.clear();
@@ -241,7 +247,6 @@ public:
     static std::vector<PartitionInfo> getPartitions() {
         std::vector<PartitionInfo> partitions;
 
-        // Get partition summary with node states
         std::string cmd = "sinfo -o \"%P %a %l %D %T\" --noheader 2>/dev/null";
         std::string out = exec(cmd);
 
@@ -256,7 +261,6 @@ public:
             std::string name, avail, timelimit, nodes_str, state;
             lss >> name >> avail >> timelimit >> nodes_str >> state;
 
-            // Remove trailing '*' from default partition
             if (!name.empty() && name.back() == '*') {
                 name.pop_back();
             }
@@ -292,15 +296,12 @@ public:
     static std::string expandSlurmPath(const std::string& path, const std::string& job_id, const std::string& job_name) {
         std::string result = path;
 
-        // Extract base job ID (without step)
         std::string base_job_id = job_id;
         size_t dot_pos = job_id.find('.');
         if (dot_pos != std::string::npos) {
             base_job_id = job_id.substr(0, dot_pos);
         }
 
-        // Replace SLURM placeholders
-        // %J = jobid.stepid, %j = jobid
         size_t pos;
         while ((pos = result.find("%J")) != std::string::npos) {
             result.replace(pos, 2, job_id);
